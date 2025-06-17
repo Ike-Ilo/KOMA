@@ -1,0 +1,9 @@
+services:
+- type: app
+  name: KOMA
+  runtime: python
+  buildCommand: ""
+  startCommand: uvicorn main:app --host 0.0.0.o0 --port 8000
+  endVars:
+    - key: port
+      value: 8000
