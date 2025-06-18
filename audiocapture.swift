@@ -68,7 +68,7 @@ class AudioStreamUp: ObservableObject {
     private let bufferQueueLock = DispatchQueue(label: "BufferQueueLock")
     
     /// Starts the audio session, WebSocket connection and a 5 section dection timer that will stop the stream after one cycle
-    ///  
+    ///
     /// BPM = The beats per minute detected from the streamed audio.
     /// ```swift
     /// 128
@@ -81,7 +81,7 @@ class AudioStreamUp: ObservableObject {
     /// ```swift
     /// "Detected", "Timeout", "Error"
     /// ```
-    ///  
+    ///
     /// >Upon instantiation these are the functionalities performed in init:
     /// - Stores the completion handler for later use once detection results are received.
     /// - Starts the audio capture session via startAudioSession() — initializes microphone, taps input, and sets up waveform buffering.
@@ -104,6 +104,26 @@ class AudioStreamUp: ObservableObject {
                 self.stop()
                 
             }
+        }
+        //Notified when another session interrupts the stream
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { notification in
+            guard let userInfo = notification.userInfo,
+                  let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+                return
+            }
+            if type == .began{
+                print("Audio session interruption began")
+                self.stop()
+            } else if type == .ended {
+                print("Audio session interruption ended")
+                try? AVAudioSession.sharedInstance().setActive(true)
+            }
+            
         }
     }
     
@@ -191,27 +211,29 @@ class AudioStreamUp: ObservableObject {
     private func startAudioSession() {
         let session = AVAudioSession.sharedInstance()
         do {
+            try session.setActive(false, options: .notifyOthersOnDeactivation)
             try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
             try session.setActive(true)
+            print("AVAudioSession activate")
         } catch {
             print("❌ Audio session error: \(error)")
         }
-
+        
         let inputNode = audioEngine.inputNode
         let format = inputNode.inputFormat(forBus: 0)
-
+        
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
             guard let channelData = buffer.floatChannelData?[0], buffer.frameLength > 0 else {
                 return
             }
-                let channelSamples = UnsafeBufferPointer(start: channelData, count: Int(buffer.frameLength))
-                let downsampled = stride(from: 0, to: channelSamples.count, by: 10).map {
-                    min(1.0, abs(channelSamples[$0]) * 10)  // Apply gain
-                }
-
-                DispatchQueue.main.async {
-                    self.samples = downsampled
-                }
+            let channelSamples = UnsafeBufferPointer(start: channelData, count: Int(buffer.frameLength))
+            let downsampled = stride(from: 0, to: channelSamples.count, by: 10).map {
+                min(1.0, abs(channelSamples[$0]) * 10)  // Apply gain
+            }
+            
+            DispatchQueue.main.async {
+                self.samples = downsampled
+            }
             
             
             let copiedBuffer = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameCapacity)!
@@ -223,7 +245,7 @@ class AudioStreamUp: ObservableObject {
                 self.enqueueAndBatchBuffer(copiedBuffer, format: format)
             }
         }
-
+        
         do {
             try audioEngine.start()
             print("✅ Audio Engine Started")
@@ -281,7 +303,7 @@ class AudioStreamUp: ObservableObject {
         bufferQueueLock.sync {
             audioBufferQueue.append(buffer)
             totalFrameCount += Int(buffer.frameLength)
-
+            
             if totalFrameCount >= targetFrameCount {
                 let merged = mergeBuffers(audioBufferQueue, format: format)
                 audioBufferQueue.removeAll()
@@ -294,23 +316,23 @@ class AudioStreamUp: ObservableObject {
     /// Merges multiple audio buffers into a single contigous/adjacent buffer. This method is used to concatenate
     /// serval `AVAudioPCMBuffer` instances into one larger buffer. It is useful when batching multiple short audio segments into a full-length buffer for
     /// analysis or transimition
-    ///  
+    ///
     /// - Parameters:
     ///   - buffers: An array of `AVAudioPCMBuffer` instance to be merged. Each buffer must have the same format.
     ///   - format: The `AVAudioFormat` describing the audio format shared by all input buggers like sample rate and channels.
     /// - Returns: A single `AVAudioPCMBuffer` that contains the audio data from all the provided buffers in sequential order.
     /// >Important: This code assumes all input buffers have matching format and channel count. The return buffer is allocated with a total frame capacity equal to the sum of all
     /// input frames. Audio data is copied channel by channel and sample by sample using `memcpy`
-    ///  
+    ///
     /// - Example:
     /// ```swift
     /// let combinedBuffer = mergeBuffers([buffer1, buffer2, buffer3], format: myFormat)
     /// ```
-    ///  
+    ///
     /// Time Complexity:
     ///    - Time: O(n), where n is the total number of frames in all buffers.
     ///   - Space: O(n), allocated for the merged buffer.
-    ///  
+    ///
     /// 1. > Calculate total number of frames across all buffers.:
     ///  ```swift
     ///    let totalFrameCount = buffers.reduce(0) { $0 + Int($1.frameLength) }
@@ -366,7 +388,7 @@ class AudioStreamUp: ObservableObject {
         let totalFrameCount = buffers.reduce(0) { $0 + Int($1.frameLength) }
         let mergedBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(totalFrameCount))!
         mergedBuffer.frameLength = AVAudioFrameCount(totalFrameCount)
-
+        
         for channel in 0..<Int(format.channelCount) {
             var offset = 0
             for buffer in buffers {
@@ -379,7 +401,7 @@ class AudioStreamUp: ObservableObject {
                 offset += Int(buffer.frameLength)
             }
         }
-
+        
         return mergedBuffer
     }
     
@@ -459,11 +481,11 @@ class AudioStreamUp: ObservableObject {
             print("❌ Failed to encode buffer: no channel data")
             return
         }
-
+        
         let numChannels = Int(format.channelCount)
         let frameCount = Int(buffer.frameLength)
         var int16Buffer = [Int16](repeating: 0, count: frameCount * numChannels)
-
+        
         for frame in 0..<frameCount {
             for channel in 0..<numChannels {
                 let floatSample = channelData[channel][frame]
@@ -472,13 +494,13 @@ class AudioStreamUp: ObservableObject {
                 int16Buffer[frame * numChannels + channel] = intSample
             }
         }
-
+        
         let audioData = int16Buffer.withUnsafeBufferPointer { buffer in
             Data(buffer: buffer)
         }
-
         
-
+        
+        
         if webSocketTask?.state == .running {
             webSocketTask?.send(.data(audioData)) { error in
                 if let error = error {
@@ -561,11 +583,11 @@ class AudioStreamUp: ObservableObject {
             print("❌ Invalid WebSocket URL")
             return
         }
-
+        
         let session = URLSession(configuration: .default)
         let task = session.webSocketTask(with: url)
         webSocketTask = task
-
+        
         print("🔌 Connecting to WebSocket...")
         task.resume()
         
@@ -587,7 +609,7 @@ class AudioStreamUp: ObservableObject {
     /// ```
     /// - This line tells the WebSocket to wait for the next message.
     /// - It uses a closer with [weak self] to avoid memory leaks or retain cycles.
-    /// 
+    ///
     /// 2. >Safely Unwrapping:
     /// ```swift
     ///        guard let self = self else { return }
@@ -670,7 +692,7 @@ class AudioStreamUp: ObservableObject {
     private func listenForMessages() {
         webSocketTask?.receive { [weak self] result in
             guard let self = self else { return }
-
+            
             switch result {
             case .failure(let error):
                 print("❌ WebSocket receive error: \(error)")
@@ -701,7 +723,7 @@ class AudioStreamUp: ObservableObject {
                     break
                 }
             }
-
+            
             self.listenForMessages()
         }
     }
@@ -743,18 +765,38 @@ class AudioStreamUp: ObservableObject {
     ///This destructor is automatically called when the ``AudioStreamUp`` instance is being deallocated.
     ///- It stops the audio engine again as a safety net in case ``stop()`` was never called manually.
     ///- Ensures the WebSocket is closed even if the instance is destroyed without explicity calling ``stop()``
+    private var isStopped = false
+    //clears buffers,cancels the timer, and releases websocket audio
+    //update doc-c
     func stop() {
+        guard !isStopped else { return }
+        isStopped = true
         print("Stopping audio stream...")
+        
+        detectionTimer?.invalidate()
+        detectionTimer = nil
+        
         audioEngine.inputNode.removeTap(onBus: 0)
         if audioEngine.isRunning {
             audioEngine.stop()
         }
+        bufferQueueLock.sync {
+            audioBufferQueue.removeAll()
+            totalFrameCount = 0
+        }
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
+        
+        do {
+            try AVAudioSession.sharedInstance().setActive(false)
+            print("AVAudioSession deactivated")
+        } catch {
+            print("Error deactivating AVAudioSession: \(error)")
+        }
     }
-
+    
     deinit {
-        audioEngine.stop()
-        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        print("Deinitialiizing AudioStreamUp...")
+        stop()
     }
 }
