@@ -2,26 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UIInterfaceOrientationLandscapeLeft</key>
-	<string></string>
-	<key>UIInterfaceOrientationLandscapeRight</key>
-	<string></string>
-	<key>&lt;dict&gt;
-    &lt;key&gt;NSAllowsArbitraryLoads&lt;/key&gt;
-    &lt;true/&gt;
-&lt;/dict&gt;</key>
-	<dict>
-		<key>New item</key>
-		<string></string>
-	</dict>
-	<key>&lt;string&gt;We need microphone access for music analysis&lt;/string&gt;</key>
-	<string></string>
-	<key>&lt;key&gt;NSMicrophoneUsageDescription&lt;/key&gt;
-</key>
-	<string></string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
+    
+    <key>NSMicrophoneUsageDescription</key>
+    <string>We need microphone access for music analysis.</string>
+    
+    <key>UIInterfaceOrientationLandscapeLeft</key>
+    <string></string>
+    
+    <key>UIInterfaceOrientationLandscapeRight</key>
+    <string></string>
 </dict>
 </plist>

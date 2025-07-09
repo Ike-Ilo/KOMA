@@ -84,7 +84,7 @@ async def websocket_audio(websocket: WebSocket):
                         print(f"✅ Decoding audio: shape={y.shape}, dtype={y.dtype}")
                         bpm = find_bpm(y)
                         key, scale, strength = find_keysig(y)
-                        key_str = f"{key}{scale}"
+                        key_str = f"{key} {scale}"
 
                         await websocket.send_json({
                             "bpm": bpm,
